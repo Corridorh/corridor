@@ -1,0 +1,32 @@
+{
+  "name": "soroban-travel-rule-sdk",
+  "version": "0.1.0",
+  "description": "TypeScript SDK for Soroban Travel Rule Router",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "scripts": {
+    "build": "tsc",
+    "test": "jest",
+    "prepublishOnly": "npm run build"
+  },
+  "keywords": [
+    "soroban",
+    "stellar",
+    "travel-rule",
+    "compliance",
+    "sdk"
+  ],
+  "author": "",
+  "license": "MIT",
+  "dependencies": {
+    "@stellar/stellar-sdk": "^11.2.2",
+    "crypto": "^1.0.1"
+  },
+  "devDependencies": {
+    "@types/node": "^20.4.0",
+    "typescript": "^5.1.6",
+    "jest": "^29.6.1",
+    "@types/jest": "^29.5.3",
+    "ts-jest": "^29.1.1"
+  }
+}
