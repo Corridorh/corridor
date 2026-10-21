@@ -95,6 +95,23 @@ and `is_registered` for known VASPs on a schedule, and alerts on failures.
 - [ ] It is safe to run repeatedly.
 - [ ] The README documents how to schedule it.
 
+### 17. Deploy and initialize atomically
+**Complexity:** Medium · **Area:** contracts, operations
+
+**Why:** Soroban 21 has no atomic constructor. `initialize` is a separate
+transaction, so a first caller can install an address they control as admin.
+`require_auth` does not close this race.
+
+**Scope:** Add a factory contract or a deployment script that submits
+`create_contract` and `initialize` in a single transaction, then asserts
+`get_admin()`.
+
+**Acceptance criteria:**
+- [ ] Deployment is atomic; a failed initialization rolls back the deployment.
+- [ ] `get_admin()` is asserted by the deployment smoke test.
+- [ ] `README.md` and `docs/DEPLOYMENT.md` use the atomic path.
+- [ ] A Testnet run demonstrates the behaviour.
+
 ---
 
 ## P1 — robustness

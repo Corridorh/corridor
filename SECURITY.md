@@ -39,7 +39,9 @@ Corridor assumes:
 2. A transfer at or above the threshold cannot succeed unless both parties are
    active VASPs.
 3. Only the admin can mutate the allowlist or the threshold.
-4. Initialization cannot be front-run; it requires the admin's authorization.
+4. Initialization is authorized: `initialize` requires the admin's auth. Deploy
+   and initialize atomically and verify `get_admin()`; auth alone does not
+   prevent a first-caller race.
 5. A failed token transfer reverts the commitment marker.
 6. No personal data is written to the ledger.
 
@@ -55,6 +57,11 @@ Corridor assumes:
 - **Single-admin model.** The registry admin can add or remove VASPs and can be
   any Stellar account, including a multisig, but there is no on-chain M-of-N
   flow in v1.
+- **Initialization race.** Soroban 21 has no atomic constructor, so deployment
+  and `initialize` are separate transactions. `require_auth` stops an attacker
+  from initializing with an address they do not control, but a first caller can
+  still install their own admin. Use an atomic deployment or a factory; tracked
+  in [`docs/ROADMAP.md`](./docs/ROADMAP.md).
 - **TTL expiry.** Persistent replay markers and VASP entries can expire if they
   are never touched. Operators must run a heartbeat. See
   [`BUILD-SPEC.md`](./BUILD-SPEC.md#7-storage-lifetime-ttl).

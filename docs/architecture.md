@@ -141,9 +141,13 @@ an indexer.
 | `registry.remove_vasp` | `caller` | `caller == admin` |
 | `registry.transfer_admin` | `caller` | `caller == admin` |
 
-Requiring auth on both `initialize` functions prevents a front-running attacker
-from deploying the contract and installing themselves as admin in the window
-between deployment and initialization.
+Both `initialize` functions require auth from the supplied admin. That proves
+the caller controls the admin address, but it does **not** prevent a
+first-caller race: an attacker can call `initialize` with an address they
+control before the operator does. Soroban 21 has no atomic constructor, so
+deploy and initialize in one transaction (or through a factory contract) and
+verify `get_admin()` immediately afterwards. This is tracked in
+[`ROADMAP.md`](./ROADMAP.md).
 
 ## 8. Privacy
 
@@ -168,6 +172,7 @@ random nonce in the payload when unlinkability matters.
 | Registry unreachable / traps | `compliant_transfer` reverts. |
 | Threshold misconfigured to `0` | Every positive transfer requires compliance. |
 | Admin key lost | Registry can no longer add/remove VASPs; router threshold is frozen. Use a multisig. |
+| A third party initializes first | It installs its own admin. Deploy and initialize atomically and verify `get_admin()`. |
 | Persistent entry expires | Replay protection weakens; mitigate with TTL bumps and heartbeats. |
 | Counterparty does not deliver payload | On-chain check passes (it only sees the hash), but the VASP's off-chain process should refuse to submit until `verify` succeeds. |
 

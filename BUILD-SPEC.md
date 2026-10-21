@@ -85,7 +85,7 @@ pub struct VaspInfo {
 
 | Function | Auth | Returns | Notes |
 |---|---|---|---|
-| `initialize(admin)` | `admin` | `()` | Panics if already initialized. |
+| `initialize(admin)` | `admin` | `()` | Panics if already initialized. See §10 for the first-caller caveat. |
 | `add_vasp(caller, vasp, endpoint_url)` | `caller` (must be admin) | `Result<(), RegistryError>` | Creates or reactivates an entry. |
 | `remove_vasp(caller, vasp)` | `caller` (must be admin) | `Result<(), RegistryError>` | Soft delete; `NotFound` if absent. |
 | `is_registered(vasp)` | none | `bool` | True only when the entry exists and is active. |
@@ -134,7 +134,7 @@ Source: [`contracts/router/src/lib.rs`](./contracts/router/src/lib.rs).
 
 | Function | Auth | Returns | Notes |
 |---|---|---|---|
-| `initialize(admin, token, registry, threshold)` | `admin` | `()` | Panics if initialized or `threshold < 0`. |
+| `initialize(admin, token, registry, threshold)` | `admin` | `()` | Panics if initialized or `threshold < 0`. See §10. |
 | `compliant_transfer(from, to, amount, metadata_hash)` | `from` | `Result<(), RouterError>` | See state machine below. |
 | `set_threshold(caller, new_threshold)` | `caller` (must be admin) | `Result<(), RouterError>` | Rejects negative values. |
 | `get_threshold()` | none | `i128` | |
@@ -273,7 +273,8 @@ value for `Some`. Do not wrap it in a synthetic tagged union.
 | Threat | Mitigation |
 |---|---|
 | Replay of a compliance commitment | `UsedHash` marker, written before value moves. |
-| Front-run initialization | `initialize` requires the admin's authorization. |
+| Unauthorized initialization | `initialize` requires the admin's authorization. |
+| First-caller initialization race | Deploy and initialize atomically; verify `get_admin()` immediately. |
 | Unauthorized registry changes | Caller must authenticate *and* equal the stored admin. |
 | De-listing a VASP by TTL lapse | TTL refresh on every registry interaction. |
 | PII on the public ledger | Only hashes, addresses, and endpoint URLs are stored. |

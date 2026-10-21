@@ -31,9 +31,13 @@ adheres to [Semantic Versioning](https://semver.org/).
 - Deployment-record format and a Testnet template under `deployments/`.
 - Committed `Cargo.lock` and both `package-lock.json` files for reproducible
   builds.
+- TTL refresh on `router.is_hash_used` and `registry.get_endpoint` reads.
 
 ### Changed
 
+- Corrected the initialization security claim. `require_auth` proves the caller
+  controls the supplied admin, but it does not prevent a first-caller race;
+  deployment docs and the roadmap now require atomic deploy+init.
 - `add_vasp`, `remove_vasp`, `transfer_admin`, and `set_threshold` now return
   typed `Result` errors instead of panicking on unauthorized input.
 - `remove_vasp` returns `NotFound` when the address was never registered.

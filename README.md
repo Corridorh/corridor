@@ -136,7 +136,7 @@ post-deployment checklist.
 |---|---|
 | No PII on-chain | Only hashes, addresses, and endpoint URLs are stored. |
 | Replay protection | A commitment is recorded before value moves and cannot be reused. |
-| Front-running resistance | `initialize` requires the admin's authorization. |
+| Initialization safety | `initialize` requires the admin's auth; deploy and initialize atomically to avoid a first-caller race. |
 | Allowlist integrity | Only the admin can add, remove, or transfer admin rights. |
 | Storage lifetime | Instance and persistent TTLs are refreshed on every live access. |
 | Re-entrancy safety | Effects are written before the external token call. |
