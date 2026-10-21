@@ -1,7 +1,7 @@
 name: Good first issue
 description: A small, well-scoped task suitable for a first contribution
 title: "good first issue: "
-labels: ["good-first-issue", "Stellar Wave"]
+labels: ["good first issue", "Stellar Wave"]
 body:
   - type: markdown
     attributes:
