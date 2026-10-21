@@ -88,8 +88,11 @@ impl VaspRegistryContract {
     /// * `admin` - the address that will have permission to add/remove VASPs.
     ///
     /// # Authorization
-    /// Requires auth from `admin`, preventing a third party from front-running
-    /// initialization and taking over the registry.
+    /// Requires auth from `admin`. This proves the caller controls the admin
+    /// address, but it does not prevent a first-caller race: an attacker can
+    /// still initialize with an address they control before the operator does.
+    /// Deploy and initialize atomically (same transaction or via a factory) and
+    /// verify `get_admin()` immediately afterwards.
     ///
     /// # Panics
     /// Panics if the contract has already been initialized.
@@ -200,11 +203,16 @@ impl VaspRegistryContract {
     /// # Returns
     /// `Some(url)` if the VASP is registered and active, `None` otherwise.
     pub fn get_endpoint(env: Env, vasp: Address) -> Option<String> {
+        let key = DataKey::Vasp(vasp);
+        let info = env.storage().persistent().get::<_, VaspInfo>(&key);
+
+        // A live lookup is a good opportunity to refresh the entry's TTL.
+        if env.storage().persistent().has(&key) {
+            Self::bump_persistent(&env, &key);
+        }
         Self::bump_instance(&env);
-        env.storage()
-            .persistent()
-            .get::<_, VaspInfo>(&DataKey::Vasp(vasp))
-            .filter(|info| info.active)
+
+        info.filter(|info| info.active)
             .map(|info| info.endpoint_url)
     }
 

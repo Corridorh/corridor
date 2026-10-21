@@ -61,8 +61,10 @@ impl RouterContract {
     /// * `threshold` - minimum amount that triggers compliance checks.
     ///
     /// # Authorization
-    /// Requires auth from `admin`, preventing a third party from front-running
-    /// initialization and installing themselves as admin.
+    /// Requires auth from `admin`. This proves the caller controls the admin
+    /// address, but it does not prevent a first-caller race: an attacker can
+    /// still initialize with an address they control before the operator does.
+    /// Deploy and initialize atomically and verify `get_admin()` afterwards.
     ///
     /// # Panics
     /// Panics if the contract has already been initialized or if `threshold`
@@ -271,7 +273,20 @@ impl RouterContract {
 
     /// Check whether a metadata hash has already been consumed.
     pub fn is_hash_used(env: Env, hash: BytesN<32>) -> bool {
-        env.storage().persistent().has(&DataKey::UsedHash(hash))
+        let key = DataKey::UsedHash(hash);
+        let used = env.storage().persistent().has(&key);
+
+        // A monitoring read should not let the marker lapse.
+        if used {
+            env.storage().persistent().extend_ttl(
+                &key,
+                PERSISTENT_BUMP_THRESHOLD,
+                PERSISTENT_BUMP_AMOUNT,
+            );
+        }
+        Self::bump_instance(&env);
+
+        used
     }
 
     /// Keep the contract configuration entry alive.
