@@ -42,9 +42,12 @@ export async function buildCompliantTransferTx(
   // Create contract instance
   const contract = new Contract(routerContractId);
 
-  // Build contract call operation
+  // Build contract call operation.
+  //
+  // Soroban encodes `Option<T>` as either `ScVal::Void` (None) or the inner
+  // value itself (Some) — there is no tagged "option" ScVal.
   let metadataHashScVal: xdr.ScVal;
-  
+
   if (metadataHash) {
     const hashBuffer = hexToBuffer(metadataHash);
     metadataHashScVal = nativeToScVal(hashBuffer, { type: 'bytes' });
@@ -65,9 +68,7 @@ export async function buildCompliantTransferTx(
         new Address(from).toScVal(),
         new Address(to).toScVal(),
         nativeToScVal(BigInt(amount), { type: 'i128' }),
-        metadataHash 
-          ? nativeToScVal({ tag: 'Some', values: [metadataHashScVal] }, { type: 'option' })
-          : nativeToScVal(undefined, { type: 'option' })
+        metadataHashScVal
       )
     )
     .setTimeout(180)
@@ -129,7 +130,11 @@ export async function verifyVaspRegistered(
 
     if (SorobanRpc.Api.isSimulationSuccess(simulated) && simulated.result) {
       const resultValue = simulated.result.retval;
-      return resultValue.switch().name === 'scvBool' && resultValue.value();
+      if (resultValue.switch().name !== 'scvBool') {
+        return false;
+      }
+      const value = resultValue.value();
+      return typeof value === 'boolean' ? value : false;
     }
 
     return false;
