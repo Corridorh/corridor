@@ -119,7 +119,7 @@ export function decryptPayload(encryptedPayload: string, privateKey?: string): T
  * @returns Buffer representation
  */
 export function hexToBytes32(hexHash: string): Buffer {
-  if (hexHash.length !== 64) {
+  if (!/^[0-9a-fA-F]{64}$/.test(hexHash)) {
     throw new Error('Hash must be 64 hex characters (32 bytes)');
   }
   return Buffer.from(hexHash, 'hex');

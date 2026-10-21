@@ -1,120 +1,97 @@
-# Soroban Travel-Rule Compliant Payment Router
+# Corridor
 
-A smart contract system for [Soroban](https://developers.stellar.org/docs/build/smart-contracts) (Stellar's smart contract platform) that lets regulated entities — exchanges, custodians, and other Virtual Asset Service Providers (VASPs) — enforce FATF Travel-Rule-style compliance metadata on token transfers, without ever putting personal data on-chain.
+[![CI](https://github.com/Corridorh/corridor/actions/workflows/ci.yml/badge.svg)](https://github.com/Corridorh/corridor/actions/workflows/ci.yml)
+[![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](./LICENSE)
 
-## The Problem
+**Travel-Rule compliant payment routing on Stellar.**
 
-Stellar's [SEP-41 token interface](https://github.com/stellar/stellar-protocol/blob/master/ecosystem/sep-0041.md) — the standard used by the Stellar Asset Contract and virtually every fungible token on Soroban — defines `transfer(from, to, amount)` with no metadata field. That's correct for the interface's purpose, but it means there's currently no on-chain mechanism for two VASPs to prove that required originator/beneficiary information (the "Travel Rule," per FATF Recommendation 16) was exchanged before a large transfer settles.
+Corridor is a [Soroban](https://developers.stellar.org/docs/build/smart-contracts)
+contract system that wraps any [SEP-41](https://github.com/stellar/stellar-protocol/blob/master/ecosystem/sep-0041.md)
+token with threshold-gated [FATF Travel Rule](https://www.fatf-gafi.org/)
+checks. Compliance metadata is committed on-chain as a hash and exchanged
+off-chain, so **no personal data ever reaches the ledger**.
 
-Today, VASPs on Stellar either handle this entirely off-chain with no on-chain enforcement, or don't handle it at all.
+## Why
 
-## The Approach
+SEP-41 defines `transfer(from, to, amount)` with no field for originator or
+beneficiary information. Regulated VASPs therefore either enforce the Travel
+Rule entirely off-chain — with no on-chain evidence — or not at all.
 
-This project does **not** put personal data on the Stellar ledger. Instead it follows the pattern used by real-world travel-rule protocols (TRISA, TRP, Sygna): a **hash-commitment on-chain, encrypted payload exchange off-chain.**
+Corridor adds a policy layer:
 
+- Below a configurable threshold, transfers pass through like a normal token.
+- At or above the threshold, the transfer must carry a `metadata_hash`: a
+  SHA-256 commitment to a payload exchanged off-chain.
+- Both counterparties must be registered, active VASPs.
+- A commitment can be used once, preventing replay.
+
+```mermaid
+flowchart LR
+    A[VASP A] -- encrypted IVMS101-lite --> B[VASP B]
+    A -- metadata_hash --> R[router]
+    R -- is_registered --> G[vasp-registry]
+    R -- transfer --> T[SEP-41 token]
+    Admin --> G
+    Admin --> R
 ```
-┌────────────┐        1. Exchange encrypted           ┌────────────┐
-│  VASP A    │ ─────── IVMS101-lite payload ─────────▶ │  VASP B    │
-│ (sender)   │ ◀────── off-chain (HTTPS) ───────────── │ (receiver) │
-└─────┬──────┘                                          └─────┬──────┘
-      │ 2. hash(payload)                                      │
-      ▼                                                        │
-┌─────────────────────────────────────────────────────────────┴───┐
-│                     Soroban Network (on-chain)                   │
-│                                                                    │
-│  ┌──────────────────┐        checks         ┌───────────────┐   │
-│  │  router contract  │ ────────────────────▶ │ vasp-registry │   │
-│  │  compliant_transfer│                       │   contract    │   │
-│  └─────────┬──────────┘                       └───────────────┘   │
-│            │ wraps                                                │
-│            ▼                                                      │
-│  ┌──────────────────┐                                             │
-│  │  SEP-41 token     │  (e.g. Stellar Asset Contract, USDC, etc.) │
-│  └──────────────────┘                                             │
-└────────────────────────────────────────────────────────────────┘
-```
 
-1. Below a configurable threshold, transfers pass straight through to the underlying token — no overhead for everyday payments.
-2. At or above the threshold, the sending VASP must supply a `metadata_hash` — a SHA-256 commitment to the compliance payload that was exchanged off-chain with the counterparty.
-3. The router verifies both parties are registered, active VASPs (via the `vasp-registry` contract) and that the hash hasn't been replayed, before releasing funds.
-4. Anyone can later verify off-chain that a given hash corresponds to a legitimate, exchanged payload — without the payload itself ever touching the public ledger.
+See [`docs/architecture.md`](./docs/architecture.md) for the full design and
+[`BUILD-SPEC.md`](./BUILD-SPEC.md) for the exact interfaces and storage layout.
 
-## Repo Structure
+## Repository layout
 
 | Path | What it is |
 |---|---|
-| `contracts/router/` | Soroban contract wrapping a SEP-41 token with threshold-gated compliance checks |
-| `contracts/vasp-registry/` | Soroban contract maintaining the allowlist of registered VASPs |
-| `contracts/common/` | Shared Rust types/errors used by both contracts |
-| `offchain/metadata-exchange/` | Reference Node/TypeScript service showing how VASPs exchange encrypted payloads and compute hashes |
-| `sdk/ts/` | TypeScript SDK for building and submitting `compliant_transfer` transactions |
-| `docs/architecture.md` | Deeper technical walkthrough of the full flow |
-| `tests/integration/` | End-to-end tests exercising the whole stack against a local/testnet deployment |
+| [`contracts/router`](./contracts/router/src/lib.rs) | Soroban contract that enforces the threshold, replay protection, and allowlist before moving tokens. |
+| [`contracts/vasp-registry`](./contracts/vasp-registry/src/lib.rs) | Soroban contract maintaining the VASP allowlist and endpoint directory. |
+| [`contracts/common`](./contracts/common/src/lib.rs) | Shared types, ABI-stable error codes, and TTL constants. |
+| [`offchain/metadata-exchange`](./offchain/metadata-exchange) | Reference Node/TypeScript service for encrypted payload exchange and hashing. |
+| [`sdk/ts`](./sdk/ts) | TypeScript SDK for building, simulating, and verifying `compliant_transfer` calls. |
+| [`tests/integration`](./tests/integration/README.md) | Cross-contract test strategy and Testnet smoke checklist. |
+| [`deployments`](./deployments/README.md) | Machine-readable deployment records. |
+| [`docs`](./docs/architecture.md) | Architecture, deployment, and scoped roadmap. |
 
-Full technical build spec (contract interfaces, storage layout, function signatures, test requirements) lives in [`BUILD-SPEC.md`](./BUILD-SPEC.md).
+## Quick start
 
-## Prerequisites
+### Prerequisites
 
-- [Rust](https://www.rust-lang.org/tools/install) (stable) with the `wasm32-unknown-unknown` target:
-  ```bash
-  rustup target add wasm32-unknown-unknown
-  ```
-- [Stellar CLI](https://developers.stellar.org/docs/tools/cli/install-cli) (formerly `soroban-cli`)
-- [Node.js](https://nodejs.org/) 18+ (for the off-chain service and SDK)
-- A funded Soroban Testnet account ([friendbot](https://developers.stellar.org/docs/tools/quickstart-with-labs/create-account))
+- Rust stable with the `wasm32-unknown-unknown` target (the repo pins this in
+  [`rust-toolchain.toml`](./rust-toolchain.toml))
+- Node.js 20+
+- The [Stellar CLI](https://developers.stellar.org/docs/tools/cli/install-cli),
+  only for deploying
 
-## Getting Started
-
-### 1. Clone and build the contracts
+### Build and test the contracts
 
 ```bash
-git clone https://github.com/code3ks/corridor.git
+git clone https://github.com/Corridorh/corridor.git
 cd corridor
-cargo build --target wasm32-unknown-unknown --release
+rustup target add wasm32-unknown-unknown
+
+cargo test --workspace
+cargo build --workspace --target wasm32-unknown-unknown --release
 ```
 
-### 2. Run contract tests
+Artifacts:
 
-```bash
-cargo test
+```
+target/wasm32-unknown-unknown/release/router.wasm
+target/wasm32-unknown-unknown/release/vasp_registry.wasm
 ```
 
-### 3. Deploy to Testnet
-
-```bash
-stellar contract deploy \
-  --wasm target/wasm32-unknown-unknown/release/vasp_registry.wasm \
-  --source <your-account> \
-  --network testnet
-
-stellar contract deploy \
-  --wasm target/wasm32-unknown-unknown/release/router.wasm \
-  --source <your-account> \
-  --network testnet
-```
-
-Then initialize both contracts (admin, token address, registry address, threshold) — see `docs/architecture.md` for exact invoke commands.
-
-### 4. Run the off-chain reference service
-
-```bash
-cd offchain/metadata-exchange
-npm install
-npm run dev
-```
-
-### 5. Use the SDK
+### Use the SDK
 
 ```bash
 cd sdk/ts
 npm install
 npm run build
+npm test
 ```
 
 ```ts
 import { hashPayload, buildCompliantTransferTx } from "soroban-travel-rule-sdk";
 
-const hash = hashPayload({
+const metadataHash = hashPayload({
   originator: { name: "Alice", vasp_id: "VASP-A", account_ref: "acct-1" },
   beneficiary: { name: "Bob", vasp_id: "VASP-B", account_ref: "acct-2" },
   amount: "5000",
@@ -122,43 +99,94 @@ const hash = hashPayload({
   timestamp: new Date().toISOString(),
 });
 
-const tx = await buildCompliantTransferTx({
+const xdr = await buildCompliantTransferTx({
   routerContractId: "C...",
   from: "G...",
   to: "G...",
   amount: "5000",
-  metadataHash: hash,
+  metadataHash,
   networkPassphrase: "Test SDF Network ; September 2015",
   rpcUrl: "https://soroban-testnet.stellar.org",
 });
 ```
 
-## Security & Compliance Notes
+### Run the off-chain reference service
 
-- **No PII on-chain, ever.** Only SHA-256 hashes and VASP routing metadata (endpoint URLs) are stored on the Stellar ledger.
-- This is a **reference implementation**, not an audited, production-ready compliance system. Encryption and key management in the off-chain service are stubbed and marked with `TODO` comments — real deployments need proper KMS/HSM integration and mutual TLS between VASPs.
-- The `vasp-registry` contract uses a single-admin model for v1. Production deployments should consider a multisig or governance-controlled admin.
-- This project implements an IVMS101-*lite* payload for MVP purposes, not the full IVMS101 schema.
+```bash
+cd offchain/metadata-exchange
+npm install
+npm run build
+npm test
+npm run dev
+```
 
-See [`BUILD-SPEC.md`](./BUILD-SPEC.md) for the complete list of v1 scope and explicit non-goals.
+The service is a **reference implementation**: encryption is a clearly-marked
+stub and storage is in-memory. See [`SECURITY.md`](./SECURITY.md) before using
+it anywhere real.
 
-## Contributing
+### Deploy to Testnet
 
-Contributions are welcome, including through the [Drips Wave](https://www.drips.network/wave/stellar) Stellar program. Check the Issues tab for scoped tasks tagged with point values. Good first issues are labeled `good-first-issue`.
+Follow [`docs/DEPLOYMENT.md`](./docs/DEPLOYMENT.md). It includes the exact
+`stellar contract deploy` / `invoke` commands, initialization order, and a
+post-deployment checklist.
 
-To contribute:
-1. Fork the repo and create a feature branch
-2. Make your changes with tests
-3. Run `cargo test` and `npm test` (in `sdk/ts` and `offchain/metadata-exchange`) before opening a PR
-4. Open a PR describing what changed and why
+## Security properties
+
+| Property | How it is enforced |
+|---|---|
+| No PII on-chain | Only hashes, addresses, and endpoint URLs are stored. |
+| Replay protection | A commitment is recorded before value moves and cannot be reused. |
+| Front-running resistance | `initialize` requires the admin's authorization. |
+| Allowlist integrity | Only the admin can add, remove, or transfer admin rights. |
+| Storage lifetime | Instance and persistent TTLs are refreshed on every live access. |
+| Re-entrancy safety | Effects are written before the external token call. |
+| Input validation | Zero/negative amounts and negative thresholds are rejected. |
+
+Known limitations and the disclosure process are documented in
+[`SECURITY.md`](./SECURITY.md).
+
+## Status
+
+Corridor is a **reference implementation**, testnet-ready but **not audited**.
+Contracts are immutable and expose no upgrade entry point. The off-chain
+service must replace its encryption/storage stubs before production use.
+See [`docs/ROADMAP.md`](./docs/ROADMAP.md) for the work required to reach a
+production deployment.
+
+## Documentation
+
+- [Build specification](./BUILD-SPEC.md) — interfaces, storage, errors, events,
+  TTL policy, security model.
+- [Architecture](./docs/architecture.md) — design rationale, sequence diagrams,
+  failure modes.
+- [Deployment](./docs/DEPLOYMENT.md) — build, deploy, initialize, verify.
+- [Roadmap](./docs/ROADMAP.md) — pre-scoped work with acceptance criteria.
+- [Contributing](./CONTRIBUTING.md) — setup, checks, commit and PR conventions.
+- [Security policy](./SECURITY.md) — reporting and known limitations.
+- [Changelog](./CHANGELOG.md).
+
+## Drips Stellar Wave
+
+Contributions are welcome through the
+[Drips Stellar Wave](https://docs.drips.network/wave/) program.
+
+Issues labelled `Stellar Wave` are eligible for the current sprint. Each issue
+includes acceptance criteria; comment on the issue to apply and a maintainer
+will assign you. Pre-scoped tasks — sized **Trivial / Medium / High** — are
+listed in [`docs/ROADMAP.md`](./docs/ROADMAP.md).
+
+Please read [`CONTRIBUTING.md`](./CONTRIBUTING.md) before opening a pull
+request. Security issues must be reported privately per
+[`SECURITY.md`](./SECURITY.md).
 
 ## License
 
-[MIT](./LICENSE) — see LICENSE file for details.
+[MIT](./LICENSE).
 
 ## References
 
 - [SEP-41: Soroban Token Interface](https://github.com/stellar/stellar-protocol/blob/master/ecosystem/sep-0041.md)
-- [Soroban Docs](https://developers.stellar.org/docs/build/smart-contracts)
-- [FATF Travel Rule (Recommendation 16)](https://www.fatf-gafi.org/)
-- [TRISA Protocol](https://trisa.io/) (reference for the on-chain/off-chain pattern used here)
+- [Soroban documentation](https://developers.stellar.org/docs/build/smart-contracts)
+- [FATF Recommendation 16](https://www.fatf-gafi.org/)
+- [TRISA](https://trisa.io/) — reference for the on-chain/off-chain pattern
+- [IVMS101](https://intervasp.org/)
