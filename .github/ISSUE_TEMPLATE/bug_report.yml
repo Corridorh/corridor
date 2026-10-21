@@ -1,0 +1,56 @@
+name: Bug report
+description: Report a defect in a contract, the SDK, or the off-chain service
+title: "bug: "
+labels: ["bug", "needs-triage"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for taking the time to report a bug. Please do **not** include
+        personal data or secrets in this issue.
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: What happened?
+      description: A clear description of the actual behaviour.
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: What did you expect?
+    validations:
+      required: true
+  - type: textarea
+    id: reproduce
+    attributes:
+      label: Steps to reproduce
+      placeholder: |
+        1. ...
+        2. ...
+        3. ...
+    validations:
+      required: true
+  - type: dropdown
+    id: component
+    attributes:
+      label: Affected component
+      options:
+        - router contract
+        - vasp-registry contract
+        - shared types
+        - TypeScript SDK
+        - off-chain metadata service
+        - documentation / CI
+    validations:
+      required: true
+  - type: input
+    id: version
+    attributes:
+      label: Version / commit
+      description: Commit SHA, tag, or branch.
+  - type: textarea
+    id: logs
+    attributes:
+      label: Relevant logs or output
+      render: shell

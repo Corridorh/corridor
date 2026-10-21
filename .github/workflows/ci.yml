@@ -1,0 +1,136 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  contracts:
+    name: Contracts (fmt, clippy, test, wasm)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt, clippy
+          targets: wasm32-unknown-unknown
+
+      - name: Cache Cargo
+        uses: Swatinem/rust-cache@v2
+
+      - name: Check formatting
+        run: cargo fmt --all -- --check
+
+      - name: Clippy (deny warnings)
+        run: cargo clippy --workspace --all-targets -- -D warnings
+
+      - name: Unit and integration tests
+        run: cargo test --workspace
+
+      - name: Build release WASM
+        run: cargo build --workspace --target wasm32-unknown-unknown --release
+
+      - name: Enforce WASM size budget (64 KiB)
+        run: |
+          set -euo pipefail
+          found=0
+          for wasm in target/wasm32-unknown-unknown/release/*.wasm; do
+            [ -e "$wasm" ] || continue
+            found=1
+            size=$(stat -c%s "$wasm")
+            printf '%s: %s bytes\n' "$wasm" "$size"
+            if [ "$size" -gt 65536 ]; then
+              echo "::error file=$wasm::$wasm exceeds the 64 KiB size budget"
+              exit 1
+            fi
+          done
+          if [ "$found" -ne 1 ]; then
+            echo "::error::No WASM artifacts were produced"
+            exit 1
+          fi
+
+      - name: Upload WASM artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: corridor-wasm
+          path: target/wasm32-unknown-unknown/release/*.wasm
+          if-no-files-found: error
+
+  sdk:
+    name: TypeScript SDK
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: sdk/ts
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+          cache-dependency-path: sdk/ts/package-lock.json
+      - run: npm ci
+      - run: npm run build
+      - run: npm test
+
+  offchain:
+    name: Off-chain reference service
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: offchain/metadata-exchange
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+          cache-dependency-path: offchain/metadata-exchange/package-lock.json
+      - run: npm ci
+      - run: npm run build
+      - run: npm test
+
+  docs:
+    name: Docs links
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Check local Markdown links
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import pathlib, re, sys
+
+          root = pathlib.Path('.')
+          missing = []
+          for md in root.rglob('*.md'):
+              if 'node_modules' in md.parts or 'target' in md.parts:
+                  continue
+              text = md.read_text(encoding='utf-8', errors='ignore')
+              for target in re.findall(r'\]\(([^)]+)\)', text):
+                  if target.startswith(('http://', 'https://', '#', 'mailto:')):
+                      continue
+                  path = target.split('#', 1)[0]
+                  if not path:
+                      continue
+                  if not (md.parent / path).resolve().exists():
+                      missing.append(f'{md}: missing {path}')
+          if missing:
+              print('\n'.join(missing))
+              sys.exit(1)
+          print('All local Markdown links resolve.')
+          PY

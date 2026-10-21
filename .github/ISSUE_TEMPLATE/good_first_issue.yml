@@ -1,0 +1,51 @@
+name: Good first issue
+description: A small, well-scoped task suitable for a first contribution
+title: "good first issue: "
+labels: ["good-first-issue", "Stellar Wave"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Use this template for tasks that can be completed in a few hours by a
+        contributor who is new to the codebase. Every task must include clear
+        acceptance criteria and the commands needed to verify the change.
+  - type: textarea
+    id: context
+    attributes:
+      label: Context
+      description: Why does this matter? Link the relevant files and design docs.
+    validations:
+      required: true
+  - type: textarea
+    id: task
+    attributes:
+      label: Task
+      description: A precise description of the change to make.
+    validations:
+      required: true
+  - type: textarea
+    id: acceptance
+    attributes:
+      label: Acceptance criteria
+      placeholder: |
+        - [ ] ...
+        - [ ] New/updated tests pass
+        - [ ] `cargo fmt`, `cargo clippy`, and `cargo test` pass
+    validations:
+      required: true
+  - type: dropdown
+    id: complexity
+    attributes:
+      label: Drips Wave complexity
+      description: Used when adding the issue to a Wave program.
+      options:
+        - Trivial (100 points)
+        - Medium (150 points)
+        - High (200 points)
+    validations:
+      required: true
+  - type: textarea
+    id: pointers
+    attributes:
+      label: Implementation pointers
+      description: Files to touch, APIs to use, and pitfalls to avoid.
